@@ -43,6 +43,7 @@
             <br/>
 
             <svg id="vis2" height="750" width="1400" style="margin:50px"></svg>
+            <p>Radius of dot indicates average plot size (in square feet)</p>
             <ul>
                 <li>The number of trees planted year to year seem to remain constant for most tree species, with a slight increase in recent years. The number of Tristaniopsis laurina :: Swamp Myrtle and Lophostemon confertus :: Brisbane Box planted also increased significantly in recent years.</li>
                 <li>The plot size for the trees also remains constant over the years. Some species have naturally larger plot sizes like Metrosideros excelsa :: New Zealand Xmas Tree and Tristaniopsis laurina :: Swamp Myrtle.</li>
@@ -640,7 +641,6 @@
                     .attr("class", "x gridlines")
                     .attr("transform", `translate(${margin.left}, ${chartHeight + margin.top + 10})`)
                     .call(bottomGrid2);
-
 
                     Object.entries(average_plotsize).forEach((data, i) => {
                         Object.entries(data[1]).forEach((data2, i) => {
