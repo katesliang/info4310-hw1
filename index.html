@@ -1,0 +1,655 @@
+<html>
+    <head>
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://d3js.org/topojson.v3.min.js"></script>
+    </head>
+    <style>
+        .gridlines line {
+            stroke: #bbb;
+        }
+
+        .gridlines .domain {
+            stroke: none;
+        }
+    </style>
+    <body>
+        <h1>
+            San Francisco Trees
+        </h1>
+        <h3>
+            Kate Liang (ksl67)
+        </h3>
+        <div id="vis-container">
+            <p id="summary"></p>
+            <ol></ol>
+
+            <p>These species are located in the following areas of the city: </p>
+            <svg id="map" height="800" width="1000"></svg>
+
+            <br/> 
+
+            <svg id="vis1" height="750" width="1500"></svg>
+            <ul>
+                <li>The DBH of all tree species decreased substantially as the years progressed. </li>
+                <li>The SF average and all 5 tree species seem to converge to a DBH of 3 in recent years planted as of 2020. </li>
+                <li>This indicates that when trees are younger (planted more recently), they have less variance in DBH, but the speed and height they eventually grow to when they are older varies more.</li>
+            </ul>
+
+            <br/>
+
+            <svg id="vis2" height="750" width="1400" style="margin:50px"></svg>
+            <ul>
+                <li>The number of trees planted year to year seem to remain constant for most tree species, with a slight increase in recent years. The number of Tristaniopsis laurina :: Swamp Myrtle and Lophostemon confertus :: Brisbane Box planted also increased significantly in recent years.</li>
+                <li>The plot size for the trees also remains constant over the years. Some species have naturally larger plot sizes like Metrosideros excelsa :: New Zealand Xmas Tree and Tristaniopsis laurina :: Swamp Myrtle.</li>
+            </ul>
+        </div>
+        <script>
+            const requestData = async () => {
+                    // Initialize dataset variables
+                    const sfneighborhoods = await d3.json("SF-Neighborhoods.geo.json")
+                    const sftrees = await d3.csv("Street_Tree_List-2022-01-30_FILTERED.csv");
+
+                    // Process data for visualization 2
+                    let vis1Data = {}
+                    for(let i = 0; i < sftrees.length; i++){
+                        row = sftrees[i]
+                        key = row["qSpecies"]
+
+                        if(row["PlotSize"] == "" || row["PlantDate"] == ""){
+                            continue
+                        }
+
+                        let plot_width = 0
+                        // Most PlotSize formatted as either "Width _ft" or "_x_"
+                        // Normalize dataset by assuming all "Width _ft" are squares 
+                        // and "_x_" measurements are given in feet when determining total plot area.
+                        // Do not include any data that does not have PlotSize or have plot size
+                        // not formatted in the two above ways.
+                        if(row["PlotSize"].toLowerCase().includes("width")){
+                            plot_width = row["PlotSize"].split(" ")[1]
+                            num_str = ""
+                            for(let j = 0; j < plot_width.length; j++){
+                                if(plot_width[j] != "f"){
+                                    num_str += plot_width[j]
+                                } else{
+                                    break
+                                }
+                            }
+                            plot_width = Number(num_str)
+                        }
+                        else{
+                            nums = row["PlotSize"].toLowerCase().split("x")
+                            if(nums.length != 2){
+                                continue
+                            }
+                            for (let j = 0; j < nums.length; j++){
+                                new_word = ""
+                                for(let ch = 0; ch < nums[j].length; ch++){
+                                    if(nums[j][ch] >= '0' && nums[j][ch] <= '9'){
+                                        new_word += nums[j][ch] 
+                                    }
+                                }
+                                nums[j] = new_word
+                            }
+                            plot_width = Number(nums[0]) * Number(nums[1])
+                        }
+
+                        dates = row["PlantDate"].split("/")
+                        month = dates[0]
+                        date = dates[1]
+                        year = dates[2].slice(0, 3)
+                        if(Number(year) > 23 || (Number(year) == 23 && Number(month) > 1 && Number(date) > 30)){ 
+                            year = "19" + year
+                        } else{
+                            year = "20" + year
+                        }
+
+                        if(!(key in vis1Data)){
+                            vis1Data[key] = {}
+                        }
+
+                        if(!(year in vis1Data[key])){
+                            vis1Data[key][year] = [0, 0]
+                        }
+
+                        vis1Data[key][year][0] += plot_width
+                        vis1Data[key][year][1] += 1
+                            
+                    }
+
+                    // Process data for visualization 1
+                    let total_count = {} // Count all trees per species
+                    let overall_avg = {} // Sum of DBH and count of all SF trees each year planted 
+                    let vis2Data = {} // Sum of DBH and count of each species each year planted
+                    for(let i = 0; i < sftrees.length; i++){
+                        row = sftrees[i]
+                        key = row["qSpecies"]
+                        if(!(key in total_count)){
+                            total_count[key] = 0
+                        }
+                        total_count[key] += 1
+
+                        if(row["PlantDate"] == ""){
+                            continue
+                        }
+
+                        if(!(key in vis2Data)){
+                           vis2Data[key] = {}
+                        }
+
+                        // Because all the plant dates are formatted as MM/DD/YY, assume all years are 2000+
+                        // unless the date is after 1/30/23. Otherwise, assume year is 1900+.
+                        dates = row["PlantDate"].split("/")
+                        month = dates[0]
+                        date = dates[1]
+                        year = dates[2].slice(0, 3)
+                        if(Number(year) > 23 || (Number(year) == 23 && Number(month) > 1 && Number(date) > 30)){ 
+                            year = "19" + year
+                        } else{
+                            year = "20" + year
+                        }
+                        if(!(year in overall_avg)){
+                            overall_avg[year] = [0, 0]
+                        }
+                        if(!(year in vis2Data[key])){
+                            vis2Data[key][year] = [0, 0]
+                        }
+                        overall_avg[year][0] += Number(row["DBH"])
+                        overall_avg[year][1] += 1
+                        vis2Data[key][year][0] += Number(row["DBH"])
+                        vis2Data[key][year][1] += 1
+                    }
+                    count_sorted = new Map([...Object.entries(total_count)].sort((a, b) => b[1] - a[1]))
+                    count_sorted_names = Array.from(count_sorted.keys())
+
+                    // Find species name of 5 most popular trees in SF
+                    top_trees = []
+                    for(let i = 0; i < 5; i++){
+                        top_trees.push(count_sorted_names[i])
+                    }
+                    // Calculate average DBH for top 5 species over time  
+                    averageDBH = {}
+                    years = new Set()
+                    for (let i = 0; i < top_trees.length; i++) {
+                        key = top_trees[i]
+                        averageDBH[key] = {}
+	                    for (let [key2, value2] of Object.entries(vis2Data[key])){
+                            averageDBH[key][key2] = value2[0]/value2[1]
+                            years.add(key2)
+                        }
+                    }
+
+                    // Calculate average DBH for all SF street trees per year planted
+                    SF_averageDBH = {}
+                    for (let [key, value] of Object.entries(overall_avg)){
+                        SF_averageDBH[key] = value[0]/value[1]
+                    }
+
+                    average_plotsize = {}
+                    for (let i = 0; i < top_trees.length; i++) {
+                        key = top_trees[i]
+                        average_plotsize[key] = {}
+	                    for (let [key2, value2] of Object.entries(vis1Data[key])){
+                            average_plotsize[key][key2] = [value2[0]/value2[1], value2[1]]
+                        }
+                    }
+                    console.log(average_plotsize)
+
+                    // Print the ordered list of top tree species
+                    const paragraph = d3.select("#summary")
+                    paragraph.text("There are " + sftrees.length + " trees in San Fransisco. Of which the most popular are: ")
+                    const list = d3.select("ol")
+                    count = 0
+                    for (let [key, value] of count_sorted) {
+                        list.append("li")
+                            .text(key + ": " + value + " trees")
+                        count += 1
+                        if(count == 5) {
+                            break
+                        }
+                    }
+
+                    // MAP
+
+                    // Initialize map variables
+                    const margin = {top: 50, right: 400, bottom: 50, left: 70};
+                    const map = d3.select("#map");
+                    let width = map.attr("width");
+                    let height = map.attr("height");
+                    const mapWidth = width - margin.left - margin.right;
+                    const mapHeight = height - margin.top - margin.bottom;
+                    const neighborhoods = topojson.feature(sfneighborhoods, sfneighborhoods.objects.SFNeighborhoods);
+                    const neighborhoodsMesh = topojson.mesh(sfneighborhoods, sfneighborhoods.objects.SFNeighborhoods);
+                    let projection = d3.geoMercator().fitSize([mapWidth, mapHeight], neighborhoods)
+                    let path = d3.geoPath().projection(projection);
+                    let viewport = map.append("g")
+                    
+                    // Filter out trees that are not top 5 species
+                    // Store remaining trees in dots array to plot on map
+                    let dots = [];
+                    for (let i = 0; i < sftrees.length; i++) {
+                       if(top_trees.includes(sftrees[i]["qSpecies"])){
+                            dots.push(sftrees[i])
+                       }
+                    }
+                    const colorScale =  d3.scaleOrdinal().domain(top_trees).range(d3.schemeCategory10);
+
+                    // color scale
+                    map.append("text")
+                        .attr("x", width - 350)
+                        .attr("y", 60)
+                        .text(top_trees[0])
+                        .style("font-size", "15px");
+                    map.append("rect")
+                        .attr("x", width - 380)
+                        .attr("y", 45)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[0]);
+                    map.append("text")
+                        .attr("x", width - 350)
+                        .attr("y", 90)
+                        .text(top_trees[1])
+                        .style("font-size", "15px");
+                    map.append("rect")
+                        .attr("x", width - 380)
+                        .attr("y", 75)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[1]);
+                    map.append("text")
+                        .attr("x", width - 350)
+                        .attr("y", 120)
+                        .text(top_trees[2])
+                        .style("font-size", "15px");
+                    map.append("rect")
+                        .attr("x", width - 380)
+                        .attr("y", 105)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[2]);
+                    map.append("text")
+                        .attr("x", width - 350)
+                        .attr("y", 150)
+                        .text(top_trees[3])
+                        .style("font-size", "15px");
+                    map.append("rect")
+                        .attr("x", width - 380)
+                        .attr("y", 135)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[3]);
+                    map.append("text")
+                        .attr("x", width - 350)
+                        .attr("y", 185)
+                        .text(top_trees[4])
+                        .style("font-size", "15px");
+                    map.append("rect")
+                        .attr("x", width - 380)
+                        .attr("y", 165)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[4]);
+
+                    viewport.selectAll("neighborhood").data(neighborhoods.features)
+                    .join("path")
+                    .attr("class", "neighborhood")
+                    .attr("d", path)
+
+                    viewport.append("path").datum(neighborhoodsMesh)
+                        .attr("class", "outline")
+                        .attr("d", path)
+                        .attr("fill", "none")
+                        .attr("stroke", "white")
+                        .attr("stroke-width", 1)
+
+                    dots.forEach((d,i) => {
+                        d['Longitude'] = Number(d['Longitude']);
+                        d['Latitude'] = Number(d['Latitude']);
+                    }) 
+
+                    dots.forEach((d, i) => {
+                        let position = projection([d['Longitude'],d['Latitude']])
+                        viewport.append("circle")
+                            .attr("cx", position[0])
+                            .attr("cy", position[1])
+                            .style("fill", colorScale(d['qSpecies']))
+                            .style("opacity", 0.4)
+                            .attr("r", 2)
+                    });
+                    
+
+                    // LINE GRAPH
+
+                    // Initialize line graph variables
+                    const svg2 = d3.select("#vis1");
+                    const dateParser = d3.timeParse('%Y');
+                    const width2 = svg2.attr("width");
+                    const height2 = svg2.attr("height");
+                    const chartWidth = width2 - margin.left - margin.right;
+                    const chartHeight = height2 - margin.top - margin.bottom;
+                    let annotations = svg2.append('g').attr('class', 'annotations');
+                    let chartArea = svg2.append("g").attr("id","points")
+                        .attr("transform",`translate(${margin.left},${margin.top})`);
+                        let years_list = Array.from(years).sort()
+                    let dbh_list = []
+                    Object.entries(averageDBH).forEach((data, i) => {
+                            Object.entries(data[1]).forEach((data2, i) => {
+                                dbh_list.push(data2[1])
+                        })
+                    })
+                    const dbhExtent = d3.extent(dbh_list);
+                    const yearScale = d3.scaleTime().domain([dateParser(Number(years_list[years_list.length - 1])), dateParser(Number(years_list[0]))]).range([chartWidth, 0]);
+                    const dbhScale = d3.scaleLinear().domain([dbhExtent[0], dbhExtent[1]]).range([chartHeight, 0]);
+                    
+                    // labels
+                    svg2.append("text")
+                        .attr("text-anchor", "end")
+                        .attr("x", chartWidth/2 +margin.left)
+                        .attr("y", height - margin.bottom)
+                        .text("Year Planted");
+                    svg2.append("text")
+                        .attr("text-anchor", "end")
+                        .attr("x", -300)
+                        .attr("y", 12)
+                        .attr("transform", "rotate(-90)")
+                        .text("Average DBH");
+                    svg2.append('text')
+                        .attr('x', chartWidth/2 + margin.left)
+                        .attr('y', margin.top/2)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '20px')
+                        .text('Average DBH of Species Types Over Time');
+                
+                    // color scale
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 60)
+                        .text(top_trees[0])
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 45)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[0]);
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 90)
+                        .text(top_trees[1])
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 75)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[1]);
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 120)
+                        .text(top_trees[2])
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 105)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[2]);
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 150)
+                        .text(top_trees[3])
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 135)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[3]);
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 185)
+                        .text(top_trees[4])
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 165)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[4]);
+                    svg2.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 215)
+                        .text("All SF trees")
+                        .style("font-size", "15px");
+                    svg2.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 195)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[5]);
+                    
+                    // Plot axis and gridlines
+                    let leftAxis = d3.axisLeft(dbhScale);
+                    annotations.append('g')
+                    .attr('class', 'y axis')
+                    .attr('transform',`translate(${margin.left-10},${margin.top})`) 
+                    .call(leftAxis);
+
+                    let leftGrid = d3.axisLeft(dbhScale)
+                                    .tickSize(-chartWidth-9)
+                                    .tickFormat('');
+                    annotations.append('g').attr('class', 'gridlines') 
+                        .attr('transform',`translate(${margin.left-10},${margin.top})`)
+                        .call(leftGrid);
+
+                    let bottomAxis = d3.axisBottom(yearScale)
+                    let bottomGrid = d3.axisBottom(yearScale)
+                                    .tickSize(-chartHeight-10)
+                                    .tickFormat("");
+                    annotations.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", `translate(${margin.left}, ${chartHeight + margin.top + 10})`)
+                    .call(bottomAxis);
+                    annotations.append("g")
+                    .attr("class", "x gridlines")
+                    .attr("transform", `translate(${margin.left}, ${chartHeight + margin.top + 10})`)
+                    .call(bottomGrid);
+                    
+
+                    console.log(averageDBH)
+
+                    // Plot points for each species each year
+                    Object.entries(averageDBH).forEach((data, i) => {
+                        Object.entries(data[1]).forEach((data2, i) => {
+                            chartArea.append('circle')
+                                .attr('r', 3)
+                                .attr('fill', colorScale(data[0]))
+                                .attr('cx', yearScale(dateParser(Number(data2[0]))))
+                                .attr('cy', dbhScale(data2[1]));
+                    })
+                    })
+
+                    // Get line connecting points for each species 
+                    Object.entries(averageDBH).forEach((data, i) => {
+                        let dataArray = Object.entries(data[1]).map(([key, value]) => [dateParser(Number(key)), value]);
+                        dataArray.sort(function(a,b) {
+                            return a[0]-b[0]
+                        });
+                        chartArea.append("path")
+                            .datum(dataArray)
+                            .attr("class", "line")
+                            .attr("stroke-width", 2)
+                            .attr("stroke", colorScale(data[0]))
+                            .attr("fill", "none")
+                            .attr("d", d3.line()
+                            .x(function (d) { return yearScale(d[0]); })
+                            .y(function (d) { return dbhScale(d[1]); })
+                            );
+                    });
+
+                    // Plot SF overall and get line
+                    Object.entries(SF_averageDBH).forEach((data, i) => {
+                        chartArea.append('circle')
+                            .attr('r', 3)
+                            .attr('fill', d3.schemeCategory10[5])
+                            .attr('cx', yearScale(dateParser(Number(data[0]))))
+                            .attr('cy', dbhScale(data[1]));
+                    })
+
+                    
+                    let dataArray = Object.entries(SF_averageDBH).map(([key, value]) => [dateParser(Number(key)), value]);
+                    dataArray.sort(function(a,b) {
+                        return a[0]-b[0]
+                    });
+                    chartArea.append("path")
+                        .datum(dataArray)
+                        .attr("class", "line")
+                        .attr("stroke-width", 2)
+                        .attr("stroke", d3.schemeCategory10[5])
+                        .attr("fill", "none")
+                        .attr("d", d3.line()
+                        .x(function (d) { return yearScale(d[0]); })
+                        .y(function (d) { return dbhScale(d[1]); })
+                        );
+
+
+                    // Initialize visualization 2 variables
+
+                    const svg3 = d3.select("#vis2");
+                    const width3 = svg3.attr("width");
+                    const height3 = svg3.attr("height");
+                    const chartWidth2 = width3 - margin.left - margin.right;
+                    const chartHeight2 = height2 - margin.top - margin.bottom;
+                    let annotations2 = svg3.append('g').attr('class', 'annotations');
+                    let chartArea2 = svg3.append("g").attr("id","points")
+                    .attr("transform",`translate(${margin.left},${margin.top})`);
+                    let count_list = []
+                    Object.entries(average_plotsize).forEach((data, i) => {
+                        Object.entries(data[1]).forEach((data2, i) => {
+                            count_list.push(data2[1][1])
+                    })
+                    })
+                    const countExtent = d3.extent(count_list);
+                    const countScale = d3.scaleLinear().domain([countExtent[0], countExtent[1]]).range([chartHeight, 0]);
+
+                    // Labels
+                    svg3.append("text")
+                        .attr("text-anchor", "end")
+                        .attr("x", chartWidth/2 +margin.left)
+                        .attr("y", height - margin.bottom)
+                    .text("Year Planted");
+                    svg3.append("text")
+                        .attr("text-anchor", "end")
+                        .attr("x", -300)
+                        .attr("y", 12)
+                        .attr("transform", "rotate(-90)")
+                        .text("Number Planted");
+                    svg3.append('text')
+                        .attr('x', chartWidth/2 + margin.left)
+                        .attr('y', margin.top/2)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '20px')
+                        .text('Land Area of Popular Species Types Over Time');
+                
+                    // Color scale
+                    svg3.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 60)
+                        .text(top_trees[0])
+                        .style("font-size", "15px");
+                    svg3.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 45)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[0]);
+                    svg3.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 90)
+                        .text(top_trees[1])
+                        .style("font-size", "15px");
+                    svg3.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 75)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[1]);
+                    svg3.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 120)
+                        .text(top_trees[2])
+                        .style("font-size", "15px");
+                    svg3.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 105)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[2]);
+                    svg3.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 150)
+                        .text(top_trees[3])
+                        .style("font-size", "15px");
+                    svg3.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 135)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[3]);
+                    svg3.append("text")
+                        .attr("x", width - 30)
+                        .attr("y", 185)
+                        .text(top_trees[4])
+                        .style("font-size", "15px");
+                    svg3.append("rect")
+                        .attr("x", width - 60)
+                        .attr("y", 165)
+                        .attr("width", 20)
+                        .attr("height", 20)
+                        .style("fill", d3.schemeCategory10[4]);
+                    
+                    // Gridlines and axis
+                    let leftAxis2 = d3.axisLeft(countScale);
+                    annotations2.append('g')
+                    .attr('class', 'y axis')
+                    .attr('transform',`translate(${margin.left-10},${margin.top})`) 
+                    .call(leftAxis2);
+
+                    let leftGrid2 = d3.axisLeft(countScale)
+                                    .tickSize(-chartWidth-9)
+                                    .tickFormat('');
+                    annotations2.append('g').attr('class', 'gridlines') 
+                        .attr('transform',`translate(${margin.left-10},${margin.top})`)
+                        .call(leftGrid2);
+
+                    let bottomAxis2 = d3.axisBottom(yearScale)
+                    let bottomGrid2 = d3.axisBottom(yearScale)
+                                    .tickSize(-chartHeight-10)
+                                    .tickFormat("");
+                    annotations2.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", `translate(${margin.left}, ${chartHeight + margin.top + 10})`)
+                    .call(bottomAxis2);
+                    annotations2.append("g")
+                    .attr("class", "x gridlines")
+                    .attr("transform", `translate(${margin.left}, ${chartHeight + margin.top + 10})`)
+                    .call(bottomGrid2);
+
+
+                    Object.entries(average_plotsize).forEach((data, i) => {
+                        Object.entries(data[1]).forEach((data2, i) => {
+                            chartArea2.append('circle')
+                                .attr('r', data2[1][0] / 2.5)
+                                .attr('fill', colorScale(data[0]))
+                                .attr('cx', yearScale(dateParser(Number(data2[0]))))
+                                .attr('cy', countScale(data2[1][1]))
+                                .style("opacity", 0.7);
+                        })
+                    })
+                }
+                requestData()
+            </script>
+        </p>
+    </body>
+</html>
