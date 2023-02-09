@@ -14,7 +14,7 @@
     </style>
     <body>
         <h1>
-            San Francisco Trees
+            San Francisco Street Trees
         </h1>
         <h3>
             Kate Liang (ksl67)
@@ -25,6 +25,11 @@
 
             <p>These species are located in the following areas of the city: </p>
             <svg id="map" height="800" width="1000"></svg>
+            <ul>
+                <li>Most Platanus x hispanica :: Sycamore: London Plane and Lophostemon confertus :: Brisbane Box are planted in the northeast parts of the city. </li>
+                <li>Most Metrosideros excelsa :: New Zealand Xmas Tree are in the western neighborhoods of SF. </li>
+                <li>There are some areas in SF (particularly in northwest SF) with none of these popular street trees, possibly due to landmarks like the Golden Gate Park.</li>
+            </ul>
 
             <br/> 
 
@@ -197,7 +202,7 @@
 
                     // Print the ordered list of top tree species
                     const paragraph = d3.select("#summary")
-                    paragraph.text("There are " + sftrees.length + " trees in San Fransisco. Of which the most popular are: ")
+                    paragraph.text("There are " + sftrees.length + " street trees in San Fransisco. Of which the most popular are: ")
                     const list = d3.select("ol")
                     count = 0
                     for (let [key, value] of count_sorted) {
